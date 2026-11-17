@@ -320,6 +320,11 @@ if (shotName) {
   state.hud.update(0.016, state);
   state.renderer.render(state.scene, state.camera);
   window.__shotReady = true;
+  // Keep re-rendering on a timer: a canvas that renders once and then sits
+  // idle is not always re-composited before a screenshot is taken.
+  setInterval(() => {
+    state.renderer.render(state.scene, state.camera);
+  }, 100);
 } else {
   document.getElementById('status').textContent = 'Solmar Bay loaded. Choose New Game or Continue.';
   frame();
