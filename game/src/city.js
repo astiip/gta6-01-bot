@@ -219,6 +219,43 @@ export function buildCity(scene, rng) {
     palm.position.set(x + rand(rng, -3, 3), 0, CITY.beachZ + rand(rng, 4, 22));
     scene.add(palm);
   }
+  // Palms down the Miramar Strip boulevards, so the main avenues read as a
+  // palm-lined coastal city even from street level.
+  for (const s of [-40, 0, 40, 80]) {
+    for (let t = -140; t <= 140; t += 40) {
+      const palm = makePalm(rng);
+      palm.position.set(s + 6.5, 0, t + rand(rng, -4, 4));
+      scene.add(palm);
+      const palm2 = makePalm(rng);
+      palm2.position.set(s - 6.5, 0, t + 20 + rand(rng, -4, 4));
+      scene.add(palm2);
+    }
+  }
+  // Boardwalk along the top of the beach, with umbrellas on the sand below it.
+  const boardwalk = new THREE.Mesh(
+    new THREE.PlaneGeometry(size, 7),
+    new THREE.MeshLambertMaterial({ color: 0x9a7a52 }),
+  );
+  boardwalk.rotation.x = -Math.PI / 2;
+  boardwalk.position.set(0, 0.07, CITY.beachZ - 4);
+  scene.add(boardwalk);
+  const umbrellaCols = [0xd84040, 0xe8c832, 0x40c8d8, 0xe88028, 0xc878d8];
+  for (let i = 0; i < 12; i += 1) {
+    const ux = rand(rng, -180, 180);
+    const uz = CITY.beachZ + rand(rng, 6, 26);
+    const pole = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.06, 0.06, 2.4, 5),
+      new THREE.MeshLambertMaterial({ color: 0xe8e8e8 }),
+    );
+    pole.position.set(ux, 1.2, uz);
+    scene.add(pole);
+    const top = new THREE.Mesh(
+      new THREE.ConeGeometry(2.2, 1.1, 8),
+      new THREE.MeshLambertMaterial({ color: pick(rng, umbrellaCols) }),
+    );
+    top.position.set(ux, 2.8, uz);
+    scene.add(top);
+  }
   for (const s of streets) {
     for (let t = -160; t <= 160; t += 80) {
       const light = makeStreetlight();
@@ -242,8 +279,83 @@ export function buildCity(scene, rng) {
   scene.add(shackRoof);
   colliders.push({ minX: -83, maxX: -77, minZ: CITY.beachZ + 47, maxZ: CITY.beachZ + 53 });
 
-  // A distant skyline ring so the horizon is never empty.
-  const skyMat = new THREE.MeshLambertMaterial({ color: 0x7a8a9a });
+  // Dante Kross's yacht at the marina — the white hull waiting at the end of
+  // the story, moored just off the beach at the east end.
+  const yacht = new THREE.Group();
+  const hull = new THREE.Mesh(
+    new THREE.BoxGeometry(7, 2.4, 20),
+    new THREE.MeshLambertMaterial({ color: 0xf0f0ea }),
+  );
+  hull.position.y = 1.2;
+  yacht.add(hull);
+  const yachtCabin = new THREE.Mesh(
+    new THREE.BoxGeometry(5, 2.2, 9),
+    new THREE.MeshLambertMaterial({ color: 0xe8e0d0 }),
+  );
+  yachtCabin.position.set(0, 3.4, -2);
+  yacht.add(yachtCabin);
+  const mast = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.12, 0.12, 9, 6),
+    new THREE.MeshLambertMaterial({ color: 0x8a8a92 }),
+  );
+  mast.position.set(0, 8, 2);
+  yacht.add(mast);
+  const goldStripe = new THREE.Mesh(
+    new THREE.BoxGeometry(7.1, 0.4, 20.1),
+    new THREE.MeshLambertMaterial({ color: 0xffd23f, emissive: 0x332200 }),
+  );
+  goldStripe.position.y = 2.1;
+  yacht.add(goldStripe);
+  yacht.position.set(120, 0, CITY.beachZ + 34);
+  yacht.rotation.y = 0.3;
+  scene.add(yacht);
+
+  // The Solmar Wheel: a ferris wheel on the beach, its rim and cabins turning
+  // slowly against the sunset — the city's landmark, visible from the streets.
+  const wheelGroup = new THREE.Group();
+  wheelGroup.position.set(-120, 0, CITY.beachZ + 6);
+  const legMat = new THREE.MeshLambertMaterial({ color: 0x8a7a6a });
+  for (const side of [-1, 1]) {
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.8, 24, 0.8), legMat);
+    leg.position.set(side * 3.4, 12, 0);
+    leg.rotation.z = side * 0.22;
+    wheelGroup.add(leg);
+  }
+  const wheel = new THREE.Group();
+  wheel.position.y = 22;
+  const rimMat = new THREE.MeshLambertMaterial({ color: 0xffd23f, emissive: 0x442200 });
+  for (const r of [13, 11]) {
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(r, 0.35, 6, 40), rimMat);
+    wheel.add(rim);
+  }
+  const spokeMat = new THREE.MeshLambertMaterial({ color: 0xd8d0c0 });
+  for (let i = 0; i < 8; i += 1) {
+    const spoke = new THREE.Mesh(new THREE.BoxGeometry(0.3, 26, 0.3), spokeMat);
+    spoke.rotation.z = (i / 8) * Math.PI;
+    wheel.add(spoke);
+  }
+  const cabinCols = [0xd84040, 0x3a6fd8, 0xe8c832, 0x38b878, 0xc878d8, 0xe88028, 0x40c8d8, 0x8838d8];
+  for (let i = 0; i < 8; i += 1) {
+    const a = (i / 8) * Math.PI * 2;
+    const cabin = new THREE.Mesh(
+      new THREE.BoxGeometry(2.2, 2.2, 2.2),
+      new THREE.MeshLambertMaterial({ color: cabinCols[i] }),
+    );
+    cabin.position.set(Math.cos(a) * 12, Math.sin(a) * 12, 0);
+    wheel.add(cabin);
+  }
+  const hub = new THREE.Mesh(
+    new THREE.CylinderGeometry(1.2, 1.2, 2, 10),
+    new THREE.MeshLambertMaterial({ color: 0xffd23f }),
+  );
+  hub.rotation.x = Math.PI / 2;
+  wheel.add(hub);
+  wheelGroup.add(wheel);
+  scene.add(wheelGroup);
+
+  // A distant skyline ring so the horizon is never empty — dusk-purple
+  // silhouettes against the sunset.
+  const skyMat = new THREE.MeshLambertMaterial({ color: 0x5a3a55 });
   for (let a = 0; a < 24; a += 1) {
     const ang = (a / 24) * Math.PI * 2;
     const r = 260 + rand(rng, 0, 40);
@@ -255,6 +367,7 @@ export function buildCity(scene, rng) {
 
   return {
     colliders,
+    ferrisWheel: wheel,
     plaza: { x: 20, z: 20 },
     pierTip: { x: -80, z: CITY.beachZ + 50 },
     marina: { x: 120, z: CITY.beachZ + 20 },

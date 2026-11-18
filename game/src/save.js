@@ -10,7 +10,7 @@ export function saveGame(state) {
       missionIndex: state.missions.index,
       completed: state.missions.completed,
       stats: state.stats,
-      player: { x: state.player.x, z: state.player.z, health: state.player.health },
+      player: { x: state.player.x, z: state.player.z, health: state.player.health, armour: state.player.armour || 0 },
       savedAt: Date.now(),
     };
     window.localStorage.setItem(SAVE_KEY, JSON.stringify(data));

@@ -1,6 +1,6 @@
 // Cars: the mesh factory, the traffic that fills the streets, the parked cars you
 // can steal, and the arcade driving physics shared by the player and the police.
-import { CITY, CAR_COLORS, CAR } from './config.js';
+import { CITY, CAR_COLORS, CAR, CAR_NAMES } from './config.js';
 import { rand, pick, clamp, angleLerp, angleDiff } from './util.js';
 import { resolveBuildingCollision } from './city.js';
 
@@ -89,10 +89,12 @@ export function makeCar(scene, color, police, x, z, heading) {
     steer: 0,
     police: !!police,
     color,
+    name: police ? 'SOLMAR PD INTERCEPTOR' : CAR_NAMES[(color >>> 0) % CAR_NAMES.length],
     ai: null,
     parked: false,
     wanted: false,
     health: 100,
+    drifting: false,
     dead: false,
   };
 }
@@ -108,6 +110,8 @@ export function stepCar(car, input, dt, city) {
   car.speed = clamp(car.speed, -CAR.maxReverse, CAR.maxSpeed);
   const steerTarget = input.left ? 1 : input.right ? -1 : 0;
   car.steer += (steerTarget - car.steer) * Math.min(1, dt * 8);
+  // Drifting: hard steering at speed, sideways enough to light up the HUD.
+  car.drifting = Math.abs(car.steer) > 0.65 && Math.abs(car.speed) > 15;
   const turn = car.steer * CAR.steer * clamp(Math.abs(car.speed) / 8, 0, 1) * Math.sign(car.speed || 1);
   car.heading += turn * dt;
   const fx = Math.sin(car.heading);

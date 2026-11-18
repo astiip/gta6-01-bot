@@ -11,7 +11,7 @@ import { Hud } from './hud.js';
 import { SoundBank } from './audio.js';
 import { saveGame, loadGame, clearSave, freshStats } from './save.js';
 import { stageShot } from './shots.js';
-import { mulberry32, hashSeed } from './util.js';
+import { mulberry32, hashSeed, sunsetSkyTexture } from './util.js';
 
 const THREE = window.THREE;
 
@@ -46,8 +46,30 @@ const state = {
 function buildWorld(seedText) {
   const rng = mulberry32(hashSeed(seedText));
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x8fd0f2);
-  scene.fog = new THREE.Fog(0x8fd0f2, 180, 420);
+  // Golden-hour sky dome: a dusk gradient wrapped around the world, with the
+  // low sun hanging over the southwest sea, so every frame carries the sunset.
+  const skyDome = new THREE.Mesh(
+    new THREE.SphereGeometry(650, 24, 16),
+    new THREE.MeshBasicMaterial({ map: sunsetSkyTexture(), side: THREE.BackSide, fog: false }),
+  );
+  scene.add(skyDome);
+  // Low sun over the southwest sea, so it hangs above the water and the beach
+  // boulevard instead of hiding behind the skyline.
+  const sunDisc = new THREE.Mesh(
+    new THREE.CircleGeometry(30, 24),
+    new THREE.MeshBasicMaterial({ color: 0xfff3c8, fog: false }),
+  );
+  sunDisc.position.set(-380, 90, 320);
+  sunDisc.lookAt(0, 20, 0);
+  scene.add(sunDisc);
+  const sunHalo = new THREE.Mesh(
+    new THREE.CircleGeometry(72, 24),
+    new THREE.MeshBasicMaterial({ color: 0xffb060, transparent: true, opacity: 0.28, fog: false }),
+  );
+  sunHalo.position.set(-382, 90, 320);
+  sunHalo.lookAt(0, 20, 0);
+  scene.add(sunHalo);
+  scene.fog = new THREE.Fog(0xf2a06a, 180, 420);
 
   const camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 900);
   camera.position.set(20, 6, -8);
@@ -57,10 +79,11 @@ function buildWorld(seedText) {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   document.getElementById('game').appendChild(renderer.domElement);
 
-  const hemi = new THREE.HemisphereLight(0xbfe3ff, 0x8a7a5a, 0.9);
+  // Low warm sun from the west, long amber light across the streets.
+  const hemi = new THREE.HemisphereLight(0xffd9b0, 0x7a5a4a, 0.75);
   scene.add(hemi);
-  const sun = new THREE.DirectionalLight(0xfff2cf, 1.6);
-  sun.position.set(120, 180, 60);
+  const sun = new THREE.DirectionalLight(0xffb060, 1.9);
+  sun.position.set(-160, 55, 120);
   scene.add(sun);
 
   state.scene = scene;
@@ -122,6 +145,10 @@ function wireWorldCallbacks() {
   state.missions.onEvent = (event) => {
     if (event.type === 'announce') {
       state.hud.showBanner(event.title, event.text, 5);
+    } else if (event.type === 'dialogue') {
+      state.hud.showDialogue(event.speaker, event.role, event.line, {
+        hair: event.hair, skin: event.skin, shirt: event.shirt,
+      });
     } else if (event.type === 'mission-complete') {
       state.player.cash += event.reward;
       state.stats.earned += event.reward;
@@ -135,6 +162,10 @@ function wireWorldCallbacks() {
       saveGame(state);
     }
   };
+  state.missions.onStart = (index) => {
+    // Skyline Escape opens with the police helicopter already on Rico.
+    if (index === 5) state.police.addStars(3, 'heli');
+  };
   state.policeWorld = {
     onRam: world.onRam,
     onBusted: world.onBusted,
@@ -143,7 +174,14 @@ function wireWorldCallbacks() {
 
 function damagePlayer(amount) {
   if (state.over || !state.started) return;
-  state.player.health -= amount;
+  // Armour soaks 60% of a hit first, then health takes the rest.
+  let rest = amount;
+  if (state.player.armour > 0) {
+    const absorbed = Math.min(state.player.armour, rest * 0.6);
+    state.player.armour -= absorbed;
+    rest -= absorbed;
+  }
+  state.player.health -= rest;
   if (state.player.health <= 0) {
     state.player.health = 0;
     endRun('WASTED', 'Rico is down. The crew will pick him up — but the mission is lost.');
@@ -207,6 +245,36 @@ function stepWorld(dt, input) {
   s.combat.gangFire(dt, s.gang, s.player, s.world);
   s.missions.update(dt, s.player, s);
   s.missions.marker.update(dt, s.time);
+  if (s.city.ferrisWheel) s.city.ferrisWheel.rotation.z += dt * 0.12;
+  // Drift scoring: hold a slide and the combo climbs, paying out as it does.
+  const car = s.player.mode === 'car' ? s.player.car : null;
+  if (car && car.drifting) {
+    s.driftTime = (s.driftTime || 0) + dt;
+    s.driftGap = 0;
+    if (s.driftTime > 0.5 && s.time - (s.lastDriftPay || 0) > 0.6) {
+      s.lastDriftPay = s.time;
+      s.driftCombo = (s.driftCombo || 0) + 1;
+      const pay = s.driftCombo * 50;
+      s.player.cash += pay;
+      s.hud.showFeedback(`DRIFT x${s.driftCombo}`, `+$${pay}`);
+    }
+  } else {
+    s.driftTime = 0;
+    s.driftGap = (s.driftGap || 0) + dt;
+    if (s.driftGap > 1) s.driftCombo = 0;
+  }
+  // Near miss: a traffic car flashing past at speed pays $250.
+  if (car && Math.abs(car.speed) > 18 && s.time - (s.lastNearMiss || 0) > 5) {
+    for (const other of s.traffic.cars) {
+      const d = Math.hypot(other.x - car.x, other.z - car.z);
+      if (d > 1.8 && d < 3.4) {
+        s.lastNearMiss = s.time;
+        s.player.cash += 250;
+        s.hud.showFeedback('NEAR MISS', '+$250');
+        break;
+      }
+    }
+  }
   // Clean up dead gang members and count the kills.
   for (const member of [...s.gang.list]) {
     if (member.dead) {
@@ -275,12 +343,14 @@ function startGame(fresh) {
     state.player.x = save.player ? save.player.x : 20;
     state.player.z = save.player ? save.player.z : 8;
     state.player.health = save.player ? save.player.health : 100;
+    state.player.armour = save.player ? (save.player.armour || 0) : 0;
     state.stats = save.stats || freshStats();
     state.missions.completed = save.completed || [];
     state.missions.start(save.missionIndex || 0);
     state.hud.showBanner('Welcome back', `Continuing: ${state.missions.name} — $${state.player.cash} in the bank`, 5);
   } else {
     state.player.cash = 150;
+    state.player.armour = 50;
     state.missions.start(0);
   }
   state.started = true;

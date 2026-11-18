@@ -29,6 +29,7 @@ export function createPlayer(scene) {
     mode: 'foot',
     car: null,
     health: PLAYER.maxHealth,
+    armour: 0,
     cash: 0,
     ammo: 12,
     reserveAmmo: 48,
@@ -239,11 +240,11 @@ export function exitCar(player, world) {
   world.traffic.parked.push(car);
 }
 
-/** Chase camera: behind the player or the car, smoothed, looking ahead. */
+/** Chase camera: close and low behind the car, smoothed, looking ahead. */
 export function updateCamera(player, camera, dt) {
   const inCar = player.mode === 'car';
-  const dist = inCar ? 11 : 7.5;
-  const height = inCar ? 4.6 : 3.6;
+  const dist = inCar ? 8.5 : 7.5;
+  const height = inCar ? 3.8 : 3.6;
   // While driving the camera settles behind the car; on foot it orbits freely.
   if (inCar) player.camYaw = angleLerp(player.camYaw, player.heading, Math.min(1, dt * 1.4));
   const yaw = player.camYaw;

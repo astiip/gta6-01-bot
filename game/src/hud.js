@@ -1,6 +1,11 @@
-// The HUD: wanted stars, cash, health, speed, the objective line, the minimap
-// canvas, and the start / busted / wasted overlays. All DOM, drawn over the 3D view.
-import { CITY } from './config.js';
+// The HUD: wanted stars, cash, health / armour / respect, the mission card
+// with its stage bar, the police response list, weapon slots, the radio, the
+// round minimap with its district name, dialogue cards with code-drawn
+// portraits, and floating drift / near-miss feedback. All DOM, drawn over
+// the 3D view, and readable at 768x480.
+import { CITY, RADIO_STATIONS, districtName } from './config.js';
+import { MISSION_NAMES } from './missions.js';
+import { clamp } from './util.js';
 
 export class Hud {
   constructor() {
@@ -8,10 +13,32 @@ export class Hud {
     this.starsEl = document.getElementById('wanted');
     this.cashEl = document.getElementById('cash');
     this.healthFill = document.getElementById('health-fill');
+    this.armourFill = document.getElementById('armour-fill');
+    this.respectFill = document.getElementById('respect-fill');
     this.speedEl = document.getElementById('speed');
-    this.ammoEl = document.getElementById('ammo');
+    this.carNameEl = document.getElementById('car-name');
+    this.carCondFill = document.getElementById('car-condition-fill');
+    this.carCond = document.getElementById('car-condition');
+    this.carCondLabel = document.getElementById('car-condition-label');
+    this.countEl = document.getElementById('mission-count');
     this.objectiveEl = document.getElementById('objective');
     this.missionEl = document.getElementById('mission-name');
+    this.stageFill = document.getElementById('stage-fill');
+    this.stageLabel = document.getElementById('stage-label');
+    this.nextEl = document.getElementById('mission-next');
+    this.pdPanel = document.getElementById('pd-panel');
+    this.pdList = document.getElementById('pd-list');
+    this.districtEl = document.getElementById('district-label');
+    this.dialogueEl = document.getElementById('dialogue');
+    this.dialoguePortrait = document.getElementById('dialogue-portrait');
+    this.dialogueName = document.getElementById('dialogue-name');
+    this.dialogueRole = document.getElementById('dialogue-role');
+    this.dialogueLine = document.getElementById('dialogue-line');
+    this.radioStation = document.getElementById('radio-station');
+    this.radioTrack = document.getElementById('radio-track');
+    this.feedbackEl = document.getElementById('feedback');
+    this.wPistol = document.getElementById('w-pistol');
+    this.wFists = document.getElementById('w-fists');
     this.bannerEl = document.getElementById('banner');
     this.bannerTitle = document.getElementById('banner-title');
     this.bannerText = document.getElementById('banner-text');
@@ -23,6 +50,9 @@ export class Hud {
     this.overlayTitle = document.getElementById('overlay-title');
     this.overlayText = document.getElementById('overlay-text');
     this.bannerTimer = 0;
+    this.dialogueTimer = 0;
+    this.radioIndex = -1;
+    this.feedbackPinned = false;
     this.city = null;
     this.buildingRects = [];
   }
@@ -93,30 +123,157 @@ export class Hud {
     this.overlay.classList.add('hidden');
   }
 
+  /** A dialogue card: portrait drawn in code, name, role and one spoken line. */
+  showDialogue(speaker, role, line, colors) {
+    const c = this.dialoguePortrait;
+    const ctx = c.getContext('2d');
+    const skin = (colors && colors.skin) || '#e8b890';
+    const hair = (colors && colors.hair) || '#2a2018';
+    const shirt = (colors && colors.shirt) || '#8a2a4a';
+    ctx.fillStyle = '#1a2030';
+    ctx.fillRect(0, 0, 64, 64);
+    // Shoulders.
+    ctx.fillStyle = shirt;
+    ctx.beginPath();
+    ctx.moveTo(6, 64);
+    ctx.quadraticCurveTo(10, 46, 32, 46);
+    ctx.quadraticCurveTo(54, 46, 58, 64);
+    ctx.closePath();
+    ctx.fill();
+    // Head.
+    ctx.fillStyle = skin;
+    ctx.beginPath();
+    ctx.arc(32, 29, 15, 0, Math.PI * 2);
+    ctx.fill();
+    // Hair.
+    ctx.fillStyle = hair;
+    ctx.beginPath();
+    ctx.arc(32, 24, 15, Math.PI, 0);
+    ctx.fill();
+    ctx.fillRect(17, 22, 30, 6);
+    // Sunglasses.
+    ctx.fillStyle = '#101018';
+    ctx.fillRect(20, 27, 10, 5);
+    ctx.fillRect(34, 27, 10, 5);
+    ctx.fillRect(29, 29, 6, 2);
+    // Mouth.
+    ctx.strokeStyle = '#7a4a3a';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(28, 41);
+    ctx.lineTo(36, 41);
+    ctx.stroke();
+    this.dialogueName.textContent = speaker;
+    this.dialogueRole.textContent = ` — ${role}`;
+    this.dialogueLine.textContent = `“${line}”`;
+    this.dialogueEl.classList.remove('hidden');
+    this.dialogueTimer = 7;
+  }
+
+  hideDialogue() {
+    this.dialogueEl.classList.add('hidden');
+    this.dialogueTimer = 0;
+  }
+
+  /** Floating feedback: DRIFT x3, NEAR MISS +$250 — pops, then fades. */
+  showFeedback(text, subtext) {
+    const div = document.createElement('div');
+    div.className = 'feedback-item';
+    div.innerHTML = `${text} <small>${subtext || ''}</small>`;
+    this.feedbackEl.appendChild(div);
+    // Pinned feedback (screenshot staging) stays until the page goes away;
+    // live feedback fades after a few seconds.
+    setTimeout(() => { if (!this.feedbackPinned) div.remove(); }, 5500);
+    while (this.feedbackEl.children.length > 3) {
+      this.feedbackEl.firstChild.remove();
+    }
+  }
+
   update(dt, state) {
-    const { player, police, missions } = state;
+    const { player, police, missions, stats } = state;
     // Wanted stars.
     let stars = '';
     for (let i = 0; i < 5; i += 1) stars += i < police.stars ? '★' : '☆';
     this.starsEl.textContent = stars;
     this.starsEl.classList.toggle('hot', police.stars > 0);
     this.cashEl.textContent = `$${player.cash.toLocaleString('en-US')}`;
+    // Vitals: health, armour, respect.
     this.healthFill.style.width = `${Math.max(0, player.health)}%`;
     this.healthFill.style.background = player.health > 50 ? '#58d858' : player.health > 25 ? '#e8b838' : '#e83838';
+    this.armourFill.style.width = `${clamp(player.armour || 0, 0, 100)}%`;
+    const respect = clamp((stats.missionsDone || 0) * 12 + (stats.gangDown || 0) * 3 + (stats.carsStolen || 0) * 2, 0, 100);
+    this.respectFill.style.width = `${respect}%`;
+    // Speed, car name, condition.
     if (player.mode === 'car' && player.car) {
-      this.speedEl.textContent = `${Math.round(Math.abs(player.car.speed) * 3.6)} km/h`;
+      this.speedEl.innerHTML = `${Math.round(Math.abs(player.car.speed) * 3.6)} <small>km/h</small>`;
+      this.carNameEl.textContent = player.car.name || '';
+      this.carCond.style.display = 'block';
+      this.carCondLabel.style.display = 'block';
+      const cond = clamp(player.car.health, 0, 100);
+      this.carCondFill.style.width = `${cond}%`;
+      this.carCondFill.style.background = cond > 50 ? '#58d858' : cond > 25 ? '#e8b838' : '#e83838';
     } else {
-      this.speedEl.textContent = player.speed > 0.5 ? 'On foot' : '';
+      this.speedEl.textContent = player.speed > 0.5 ? 'ON FOOT' : '';
+      this.carNameEl.textContent = player.speed > 0.5 ? 'RICO VEGA' : '';
+      this.carCond.style.display = 'none';
+      this.carCondLabel.style.display = 'none';
     }
-    this.ammoEl.textContent = player.mode === 'car' ? '' : `🔫 ${player.ammo} / ${player.reserveAmmo}`;
-    this.missionEl.textContent = missions.active ? `★ ${missions.name}` : 'Free Roam';
-    this.objectiveEl.textContent = missions.objectiveText();
+    // Weapon slots: pistol is the live weapon on foot, fists while driving.
+    this.wPistol.querySelector('.w-ammo').textContent = `${player.ammo} / ${player.reserveAmmo}`;
+    this.wPistol.classList.toggle('active', player.mode === 'foot');
+    this.wFists.classList.toggle('active', player.mode === 'car');
+    // Mission card: number, name, objective, stage bar, next step.
+    if (missions.active) {
+      const total = MISSION_NAMES.length;
+      this.countEl.textContent = `MISSION ${missions.index + 1}/${total}`;
+      this.missionEl.textContent = missions.name.toUpperCase();
+      this.objectiveEl.textContent = missions.objectiveText();
+      const steps = missions.steps.length;
+      const done = Math.min(missions.stepIndex, steps);
+      this.stageFill.style.width = `${steps > 0 ? (done / steps) * 100 : 0}%`;
+      this.stageLabel.textContent = `STEP ${Math.min(done + 1, steps)}/${steps}`;
+      const next = missions.steps[missions.stepIndex + 1];
+      this.nextEl.innerHTML = next
+        ? `<b>NEXT:</b> ${next.text}`
+        : '<b>NEXT:</b> Finish the job — complete this step';
+    } else {
+      this.countEl.textContent = 'FREE ROAM';
+      this.missionEl.textContent = 'Solmar Bay';
+      this.objectiveEl.textContent = 'Free roam — press M for the mission list, E to steal a car';
+      this.stageFill.style.width = '0%';
+      this.stageLabel.textContent = '';
+      this.nextEl.textContent = '';
+    }
+    // Police response list.
+    if (police.stars > 0) {
+      const units = police.responseUnits(player);
+      this.pdList.innerHTML = units.map((u) => (
+        `<div class="pd-row"><span class="pd-callsign">${u.callsign}</span>` +
+        `<span class="pd-dist">${u.dist}m</span>` +
+        `<span class="pd-behavior">${u.behavior}</span></div>`
+      )).join('');
+      this.pdPanel.classList.remove('hidden');
+    } else {
+      this.pdPanel.classList.add('hidden');
+    }
+    // District under the minimap, radio track on a slow rotation.
+    this.districtEl.textContent = districtName(player.x, player.z);
+    const radioIndex = Math.floor((state.time || 0) / 18) % RADIO_STATIONS.length;
+    if (radioIndex !== this.radioIndex) {
+      this.radioIndex = radioIndex;
+      this.radioStation.textContent = RADIO_STATIONS[radioIndex].station;
+      this.radioTrack.textContent = RADIO_STATIONS[radioIndex].track;
+    }
     this.crosshair.style.display = player.mode === 'foot' ? 'block' : 'none';
     const dmg = 1 - player.health / 100;
     this.damageEl.style.opacity = String(dmg * 0.55);
     if (this.bannerTimer > 0) {
       this.bannerTimer -= dt;
       if (this.bannerTimer <= 0) this.hideBanner();
+    }
+    if (this.dialogueTimer > 0) {
+      this.dialogueTimer -= dt;
+      if (this.dialogueTimer <= 0) this.hideDialogue();
     }
     this.drawMinimap(state);
   }
@@ -135,7 +292,7 @@ export class Hud {
       const [mx, my] = toMap(step.x, step.z);
       ctx.fillStyle = '#ffd23f';
       ctx.beginPath();
-      ctx.arc(mx, my, 6, 0, Math.PI * 2);
+      ctx.arc(mx, my, 5, 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = '#000';
       ctx.lineWidth = 2;
@@ -167,6 +324,17 @@ export class Hud {
     for (const off of police.officers) {
       const [x, y] = toMap(off.x, off.z);
       ctx.fillRect(x - 2, y - 2, 4, 4);
+    }
+    // Helicopter.
+    if (police.heli) {
+      const [x, y] = toMap(police.heli.x, police.heli.z);
+      ctx.fillStyle = '#ffd23f';
+      ctx.beginPath();
+      ctx.arc(x, y, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
     }
     // Player arrow, pointing where the player faces.
     const [px, py] = toMap(player.x, player.z);

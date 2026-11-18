@@ -48,15 +48,16 @@ export function stageShot(name, state, seedText) {
   const { player, police, missions, gang, traffic, peds, city } = state;
   const seconds = name === 'chase' ? 7 : name === 'drive' ? 8 : name === 'mission' ? 4 : 3;
   player.health = 100;
-  player.cash = 2450;
+  player.armour = 50;
+  player.cash = 12450;
   player.ammo = 9;
   player.reserveAmmo = 36;
 
   if (name === 'chase') {
-    // Cover: a police chase with the wanted level, the minimap and a mission
-    // objective all on the HUD at once. The car runs straight up the x=40
-    // avenue so the autopilot never cuts across buildings; the police start
-    // on the same avenue, right behind it.
+    // Cover: a golden-hour police chase — 3 wanted stars, the helicopter and
+    // its searchlight, the full HUD, and a mission objective at once. The car
+    // runs straight up the x=40 avenue so the autopilot never cuts across
+    // buildings; the police start on the same avenue, right behind it.
     missions.start(2);
     missions.stepIndex = 1;
     missions.refreshMarker();
@@ -74,22 +75,51 @@ export function stageShot(name, state, seedText) {
     // Two police cars head-on ahead of the player, so the chase is visible
     // in the frame, and one more right behind it.
     for (let i = 0; i < 2; i += 1) {
-      const pc = makeCar(state.scene, 0xf0f0f0, true, 40 + (i === 0 ? -2 : 2), player.z - 30 - i * 10, 0);
+      const pc = makeCar(state.scene, 0xf0f0f0, true, 40 + (i === 0 ? -2 : 2), player.z - 24 - i * 10, 0);
       pc.ai = { player: true };
       police.cars.push(pc);
     }
     const pcBehind = makeCar(state.scene, 0xf0f0f0, true, 40, player.z + 16, Math.PI);
     pcBehind.ai = { player: true };
     police.cars.push(pcBehind);
+    // The helicopter hangs low ahead of the player for the frame, its
+    // searchlight beam on the street — during play it rides higher.
+    if (police.heli) {
+      police.heli.x = player.x + 4;
+      police.heli.z = player.z - 30;
+      police.heli.y = 12;
+      police.heli.mesh.position.set(police.heli.x, police.heli.y, police.heli.z);
+      police.heli.mesh.rotation.y = Math.atan2(player.x - police.heli.x, player.z - police.heli.z);
+      police.heli.beam.position.x = (player.x - police.heli.x) * 0.25;
+      police.heli.beam.position.z = (player.z - police.heli.z) * 0.25;
+    }
   } else if (name === 'drive') {
+    // Drift run down the x=-40 avenue: the autopilot weaves with a sine target
+    // so the car slides at speed and the real drift combo pays out on the HUD.
     missions.start(1);
     putPlayerInCar(state, -40, 120, Math.PI);
     for (let i = 0; i < seconds / STEP; i += 1) {
-      const input = driveToward(state, -40, -160);
+      const t = i * STEP;
+      const input = driveToward(state, -40 + Math.sin(t * 1.1) * 26, -160);
       state.stepWorld(STEP, input);
     }
+    // If the weave never slid, hold a hard turn until the drift actually fires.
+    if (!state.driftCombo) {
+      for (let i = 0; i < 150; i += 1) {
+        state.stepWorld(STEP, { forward: true, back: false, left: true, right: false });
+      }
+    }
+    // One fresh copy of the drift feedback the run really earned, so the still
+    // frame carries it — the combo and the payout are the run's own numbers.
+    // It is pinned: a slow headless capture must not outrun its lifetime.
+    if (state.driftCombo) {
+      state.hud.feedbackEl.innerHTML = '';
+      state.hud.showFeedback(`DRIFT x${state.driftCombo}`, `+$${state.driftCombo * 50}`);
+      state.hud.feedbackPinned = true;
+    }
   } else if (name === 'mission') {
-    // Turf War mid-fight at the plaza: gang members closing in, two already down.
+    // Turf War mid-fight at the plaza: gang members closing in, two already down,
+    // Mara's dialogue card on the HUD.
     missions.start(3);
     player.x = city.plaza.x + 14;
     player.z = city.plaza.z + 10;
@@ -111,11 +141,13 @@ export function stageShot(name, state, seedText) {
       state.stepWorld(STEP, { forward: false, back: false, left: false, right: false });
     }
   } else {
-    // City: on foot in the plaza, traffic and pedestrians all around.
+    // City: on foot on the beach boulevard at golden hour — the Solmar Wheel,
+    // the low sun over the southwest sea, palms down the Strip, Mara's dialogue.
+    // Facing southwest puts the sun disc and the Wheel in the same frame.
     missions.start(0);
-    player.x = city.plaza.x + 10;
-    player.z = city.plaza.z - 6;
-    player.heading = Math.PI * 0.75;
+    player.x = 40;
+    player.z = 168;
+    player.heading = -1.35;
     player.camYaw = player.heading;
     player.mesh.position.set(player.x, 0, player.z);
     for (let i = 0; i < seconds / STEP; i += 1) {
@@ -129,10 +161,11 @@ export function stageShot(name, state, seedText) {
   // The mission-intro banner would cover the middle of the frame; the mission
   // box in the top-left already names the job, so hide it for the shot.
   state.hud.hideBanner();
+  // Close chase cam: the car fills the frame, low and tight behind it.
   state.camera.position.set(
-    player.x - Math.sin(player.camYaw) * (player.mode === 'car' ? 13 : 7.5),
-    player.mode === 'car' ? 5.4 : 3.6,
-    player.z - Math.cos(player.camYaw) * (player.mode === 'car' ? 13 : 7.5),
+    player.x - Math.sin(player.camYaw) * (player.mode === 'car' ? 9.5 : 7.5),
+    player.mode === 'car' ? 4.0 : 3.6,
+    player.z - Math.cos(player.camYaw) * (player.mode === 'car' ? 9.5 : 7.5),
   );
   state.camera.lookAt(player.x, 1.4, player.z);
 }

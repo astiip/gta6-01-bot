@@ -4,10 +4,11 @@
 // *.min.js and its ES modules, no network request), and the program hands it in.
 // It copies game/ and screenshots/ from beside this file to /output and writes
 // /output/dossier.json, the summary the judge reads, with the vendored make.fun
-// library. The game itself: a sun-soaked coastal city to explore on foot and by
-// car, traffic and pedestrians, cars to steal, a wanted level with police who
-// chase, six story missions, gang combat, a HUD with a minimap, a start screen
-// and localStorage saves — all original content, nothing from any commercial game.
+// library. The game itself: a sun-soaked coastal city at golden hour to explore
+// on foot and by car, traffic and pedestrians, cars to steal, a wanted level
+// with police cars and a helicopter who chase, eight story missions, gang
+// combat, a HUD with a round minimap, a start screen and localStorage saves —
+// all original content, nothing from any commercial game.
 //
 // Serve it locally with `node serve.ts`, then open http://localhost:8080.
 // Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:

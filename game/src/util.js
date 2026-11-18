@@ -85,3 +85,44 @@ export function facadeTexture(base, lit, rng) {
   tex.colorSpace = window.THREE.SRGBColorSpace;
   return tex;
 }
+
+/**
+ * Golden-hour sky: a vertical gradient from dusk purple through sunset pink
+ * and orange to a warm horizon, with a low glowing sun disc off to the west.
+ * Used as the scene background so every frame carries the sunset.
+ */
+export function sunsetSkyTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024;
+  canvas.height = 512;
+  const ctx = canvas.getContext('2d');
+  const grad = ctx.createLinearGradient(0, 0, 0, 512);
+  grad.addColorStop(0, '#3a2350');
+  grad.addColorStop(0.42, '#8a3a6a');
+  grad.addColorStop(0.62, '#ff7e5f');
+  grad.addColorStop(0.82, '#feb47b');
+  grad.addColorStop(1, '#ffd9a0');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 1024, 512);
+  // Low sun, west (left) of frame, with a soft halo.
+  const halo = ctx.createRadialGradient(300, 330, 10, 300, 330, 190);
+  halo.addColorStop(0, 'rgba(255, 240, 190, 0.95)');
+  halo.addColorStop(0.35, 'rgba(255, 190, 110, 0.55)');
+  halo.addColorStop(1, 'rgba(255, 150, 90, 0)');
+  ctx.fillStyle = halo;
+  ctx.fillRect(0, 0, 1024, 512);
+  ctx.fillStyle = '#fff3c8';
+  ctx.beginPath();
+  ctx.arc(300, 330, 42, 0, Math.PI * 2);
+  ctx.fill();
+  // A few thin dusk clouds catching the pink light.
+  ctx.fillStyle = 'rgba(255, 170, 150, 0.35)';
+  for (const [cx, cy, cw] of [[620, 150, 260], [820, 210, 200], [120, 120, 180], [480, 90, 220]]) {
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, cw / 2, 12, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  const tex = new window.THREE.CanvasTexture(canvas);
+  tex.colorSpace = window.THREE.SRGBColorSpace;
+  return tex;
+}

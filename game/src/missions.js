@@ -11,6 +11,8 @@ export const MISSION_NAMES = [
   'The Drop',
   'Turf War',
   'The Bank Job',
+  'Skyline Escape',
+  'The Golden Mile',
   'King of Solmar',
 ];
 
@@ -20,7 +22,21 @@ export const MISSION_INTROS = [
   'A package for the north docks — and the Solmar Bay PD just got a tip. Lose them or outrun them.',
   'The Vultures are moving on the plaza. Clear them out and show them whose streets these are.',
   'Hit the Solmar Bay Bank. Hold the lobby while Mara cracks the vault, then get out clean.',
+  'The bank job put a police helicopter on you. Break line of sight, lose the chopper, reach the safehouse.',
+  'One last quiet job before the end: steal the Vultures\' gold coupe and deliver it to the marina — in their own car, nobody looks twice.',
   'Dante Kross is on the marina yacht. Reach it, end this, and take the city.',
+];
+
+// Who says what when a mission starts — the HUD draws their portrait and line.
+export const MISSION_DIALOGUE = [
+  { speaker: 'Mara Solis', role: 'Fixer', line: 'Rico. You drive, I plan. Get my car to the pier — and don\'t scratch the paint.', hair: '#2a2018', skin: '#e8b890', shirt: '#8a2a4a' },
+  { speaker: 'Mara Solis', role: 'Fixer', line: 'The crew needs wheels. That coupe on the Strip is ours now. Take it.', hair: '#2a2018', skin: '#e8b890', shirt: '#8a2a4a' },
+  { speaker: 'Mara Solis', role: 'Fixer', line: 'Package for the north docks. The PD got a tip — so drive like you mean it.', hair: '#2a2018', skin: '#e8b890', shirt: '#8a2a4a' },
+  { speaker: 'Mara Solis', role: 'Fixer', line: 'The Vultures are moving on my plaza. Clear them out. All of them.', hair: '#2a2018', skin: '#e8b890', shirt: '#8a2a4a' },
+  { speaker: 'Mara Solis', role: 'Fixer', line: 'We hit the bank tonight. Hold the lobby while I crack the vault.', hair: '#2a2018', skin: '#e8b890', shirt: '#8a2a4a' },
+  { speaker: 'Lena Voss', role: 'Getaway Pilot', line: 'Chopper\'s on you, Rico! Break line of sight — duck under the skyline, lose the light!', hair: '#c8a020', skin: '#f0c8a0', shirt: '#2a5a8a' },
+  { speaker: 'Nina', role: 'Wheelwoman', line: 'Take the gold coupe. It\'s the Vultures\' own car — nobody stops their own. Marina, quiet.', hair: '#101018', skin: '#c89068', shirt: '#3a7a4a' },
+  { speaker: 'Mara Solis', role: 'Fixer', line: 'Dante\'s on the yacht. End this, Rico — Solmar Bay is ours.', hair: '#2a2018', skin: '#e8b890', shirt: '#8a2a4a' },
 ];
 
 function stepGoto(x, z, radius, text) {
@@ -75,6 +91,17 @@ export function missionSteps(index, city) {
         stepEscape('Get out — lose the police and reach the garage'),
       ];
     case 5:
+      return [
+        stepGoto(city.garage.x, city.garage.z, 7, 'Reach the safehouse garage — the chopper is on you'),
+        stepEscape('Lose the chopper — break line of sight, then lay low'),
+      ];
+    case 6:
+      return [
+        stepSteal('Steal the gold coupe — the Vultures\' own car, nobody will look twice'),
+        stepDeliver(city.marina.x, city.marina.z - 24, 'Deliver the gold coupe to the marina'),
+        stepGoto(city.garage.x, city.garage.z, 7, 'Get back to the garage — Mara has the last job'),
+      ];
+    case 7:
       return [
         stepGoto(city.marina.x, city.marina.z - 30, 7, 'Reach the marina — Dante Kross is waiting'),
         stepKill(4, city.marina.x, city.marina.z, 'Take down Dante\'s guards (4 left)'),
@@ -143,6 +170,7 @@ export class MissionManager {
     this.steps = [];
     this.stepIndex = 0;
     this.onEvent = null;
+    this.onStart = null;
     this.escapeTimer = 0;
   }
 
@@ -161,6 +189,10 @@ export class MissionManager {
     this.active = true;
     this.escapeTimer = 0;
     this.announce(MISSION_NAMES[index], MISSION_INTROS[index]);
+    if (this.onEvent && MISSION_DIALOGUE[index]) {
+      this.onEvent({ type: 'dialogue', ...MISSION_DIALOGUE[index] });
+    }
+    if (this.onStart) this.onStart(index);
     this.refreshMarker();
   }
 
