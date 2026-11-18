@@ -13,6 +13,8 @@ export class SoundBank {
     this.sirenGain = null;
     this.sirenTimer = 0;
     this.sirenHigh = false;
+    this.waveGain = null;
+    this.waveTimer = 0;
   }
 
   /** Must be called from a user gesture; browsers block audio before one. */
@@ -29,6 +31,7 @@ export class SoundBank {
       this.master.connect(this.ctx.destination);
       this.startEngineLoop();
       this.startSirenLoop();
+      this.startWaveLoop();
     } catch (err) {
       this.ctx = null;
     }
@@ -96,6 +99,21 @@ export class SoundBank {
     this.engineOsc.start();
   }
 
+  startWaveLoop() {
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.noiseBuffer(4);
+    src.loop = true;
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 400;
+    this.waveGain = this.ctx.createGain();
+    this.waveGain.gain.value = 0.05;
+    src.connect(filter);
+    filter.connect(this.waveGain);
+    this.waveGain.connect(this.master);
+    src.start();
+  }
+
   startSirenLoop() {
     this.sirenOsc = this.ctx.createOscillator();
     this.sirenOsc.type = 'triangle';
@@ -123,6 +141,10 @@ export class SoundBank {
       }
       const target = wanted > 0 && !this.muted ? 0.045 : 0;
       this.sirenGain.gain.value += (target - this.sirenGain.gain.value) * Math.min(1, dt * 4);
+    }
+    if (this.waveGain) {
+      this.waveTimer += dt;
+      this.waveGain.gain.value = 0.03 + 0.02 * Math.sin(this.waveTimer * 0.5);
     }
   }
 

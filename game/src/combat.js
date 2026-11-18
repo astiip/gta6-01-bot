@@ -112,6 +112,13 @@ export class Combat {
       const dist = Math.hypot(dx, dz);
       member.heading = Math.atan2(dx, dz);
       member.mesh.rotation.y = member.heading;
+      // Wounded gang members back off instead of standing and shooting.
+      if (member.health <= 1 && dist < 15) {
+        member.x -= Math.sin(member.heading) * 2.4 * dt;
+        member.z -= Math.cos(member.heading) * 2.4 * dt;
+        member.mesh.position.set(member.x, 0, member.z);
+        continue;
+      }
       // Strafe sideways to stay a threat, not a statue.
       member.x += Math.cos(member.heading) * member.strafeDir * 1.2 * dt;
       member.z -= Math.sin(member.heading) * member.strafeDir * 1.2 * dt;

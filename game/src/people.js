@@ -7,6 +7,7 @@ import { resolveBuildingCollision } from './city.js';
 const THREE = window.THREE;
 
 const SHIRTS = [0xe8e8e8, 0xd8a040, 0x40a0d8, 0xd87090, 0x70c870, 0xc8c8c8, 0x9060c0];
+const BEACH_SHIRTS = [0xff6b6b, 0xffd93d, 0x6bcbff, 0xff9f43];
 const SKINS = [0xe8b890, 0xc89068, 0x8a5a3a, 0xf0c8a0];
 
 /** A simple humanoid: torso, head, arms and legs that swing while walking. */
@@ -68,6 +69,7 @@ export class Pedestrians {
     this.city = city;
     this.list = [];
     for (let i = 0; i < 26; i += 1) this.spawn();
+    for (let i = 0; i < 4; i += 1) this.spawnBeachgoer();
   }
 
   spawn() {
@@ -87,6 +89,29 @@ export class Pedestrians {
       panic: 0,
       fallen: false,
       fallTimer: 0,
+      beach: false,
+    };
+    person.target = this.pickTarget(person);
+    this.list.push(person);
+    return person;
+  }
+
+  /** A bright-shirted beachgoer strolling the boardwalk at z = 168. */
+  spawnBeachgoer() {
+    const x = rand(this.rng, -140, 140);
+    const z = 168 + rand(this.rng, -4, 4);
+    const mesh = makePersonMesh(pick(this.rng, BEACH_SHIRTS), pick(this.rng, [0x2a2a3a, 0x4a3a2a]), pick(this.rng, SKINS));
+    mesh.position.set(x, 0, z);
+    this.scene.add(mesh);
+    const person = {
+      mesh, x, z,
+      heading: this.rng() * Math.PI * 2,
+      speed: rand(this.rng, 0.7, 1.2),
+      target: null,
+      panic: 0,
+      fallen: false,
+      fallTimer: 0,
+      beach: true,
     };
     person.target = this.pickTarget(person);
     this.list.push(person);
@@ -94,6 +119,7 @@ export class Pedestrians {
   }
 
   pickTarget(person) {
+    if (person.beach) return { x: rand(this.rng, -140, 140), z: 168 + rand(this.rng, -4, 4) };
     const s = pick(this.rng, CITY.streets);
     const t = rand(this.rng, -160, 160);
     const alongX = this.rng() < 0.5;
