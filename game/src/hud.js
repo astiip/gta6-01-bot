@@ -21,6 +21,10 @@ export class Hud {
     this.carCond = document.getElementById('car-condition');
     this.carCondLabel = document.getElementById('car-condition-label');
     this.countEl = document.getElementById('mission-count');
+    this.timerEl = document.getElementById('mission-timer');
+    this.clockEl = document.getElementById('day-clock');
+    this.sightEl = document.getElementById('sight');
+    this.pdMetaEl = document.getElementById('pd-meta');
     this.objectiveEl = document.getElementById('objective');
     this.missionEl = document.getElementById('mission-name');
     this.stageFill = document.getElementById('stage-fill');
@@ -53,6 +57,8 @@ export class Hud {
     this.dialogueTimer = 0;
     this.radioIndex = -1;
     this.feedbackPinned = false;
+    this.missionIndex = -1;
+    this.missionStartTime = 0;
     this.city = null;
     this.buildingRects = [];
   }
@@ -191,11 +197,32 @@ export class Hud {
 
   update(dt, state) {
     const { player, police, missions, stats } = state;
+    // Day clock: the story opens at 18:45 on Day 1 and one game minute
+    // passes per real second, so the golden hour never ends mid-mission.
+    const mins = 18 * 60 + 45 + Math.floor(state.time || 0);
+    const hh = String(Math.floor(mins / 60) % 24).padStart(2, '0');
+    const mm = String(mins % 60).padStart(2, '0');
+    this.clockEl.textContent = `DAY 1  ${hh}:${mm}`;
     // Wanted stars.
     let stars = '';
     for (let i = 0; i < 5; i += 1) stars += i < police.stars ? '★' : '☆';
     this.starsEl.textContent = stars;
     this.starsEl.classList.toggle('hot', police.stars > 0);
+    // IN SIGHT: a unit is close enough to see Rico; SEARCHING while the
+    // heat is on but nobody has eyes on him.
+    if (police.stars > 0) {
+      const nearest = police.nearestDistance(player);
+      this.sightEl.classList.remove('hidden');
+      if (nearest < 45) {
+        this.sightEl.textContent = '● IN SIGHT';
+        this.sightEl.classList.remove('searching');
+      } else {
+        this.sightEl.textContent = '○ SEARCHING';
+        this.sightEl.classList.add('searching');
+      }
+    } else {
+      this.sightEl.classList.add('hidden');
+    }
     this.cashEl.textContent = `$${player.cash.toLocaleString('en-US')}`;
     // Vitals: health, armour, respect.
     this.healthFill.style.width = `${Math.max(0, player.health)}%`;
@@ -222,8 +249,15 @@ export class Hud {
     this.wPistol.querySelector('.w-ammo').textContent = `${player.ammo} / ${player.reserveAmmo}`;
     this.wPistol.classList.toggle('active', player.mode === 'foot');
     this.wFists.classList.toggle('active', player.mode === 'car');
-    // Mission card: number, name, objective, stage bar, next step.
+    // Mission card: number, name, objective, stage bar, next step, timer.
+    // The timer counts up from the moment the mission starts.
     if (missions.active) {
+      if (missions.index !== this.missionIndex) {
+        this.missionIndex = missions.index;
+        this.missionStartTime = state.time || 0;
+      }
+      const elapsed = Math.max(0, Math.floor((state.time || 0) - this.missionStartTime));
+      this.timerEl.textContent = `⏱ ${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, '0')}`;
       const total = MISSION_NAMES.length;
       this.countEl.textContent = `MISSION ${missions.index + 1}/${total}`;
       this.missionEl.textContent = missions.name.toUpperCase();
@@ -231,12 +265,14 @@ export class Hud {
       const steps = missions.steps.length;
       const done = Math.min(missions.stepIndex, steps);
       this.stageFill.style.width = `${steps > 0 ? (done / steps) * 100 : 0}%`;
-      this.stageLabel.textContent = `STEP ${Math.min(done + 1, steps)}/${steps}`;
+      this.stageLabel.textContent = `STAGE ${Math.min(done + 1, steps)}/${steps}`;
       const next = missions.steps[missions.stepIndex + 1];
       this.nextEl.innerHTML = next
         ? `<b>NEXT:</b> ${next.text}`
         : '<b>NEXT:</b> Finish the job — complete this step';
     } else {
+      this.missionIndex = -1;
+      this.timerEl.textContent = '';
       this.countEl.textContent = 'FREE ROAM';
       this.missionEl.textContent = 'Solmar Bay';
       this.objectiveEl.textContent = 'Free roam — press M for the mission list, E to steal a car';
@@ -247,11 +283,13 @@ export class Hud {
     // Police response list.
     if (police.stars > 0) {
       const units = police.responseUnits(player);
+      this.pdMetaEl.textContent = `${police.cars.length} UNITS • CODE ${police.stars}`;
       this.pdList.innerHTML = units.map((u) => (
         `<div class="pd-row"><span class="pd-callsign">${u.callsign}</span>` +
         `<span class="pd-dist">${u.dist}m</span>` +
         `<span class="pd-behavior">${u.behavior}</span></div>`
-      )).join('');
+      )).join('') + (police.cars.length > units.length
+        ? `<div id="pd-foot">+${police.cars.length - units.length} more units in the search zone</div>` : '');
       this.pdPanel.classList.remove('hidden');
     } else {
       this.pdPanel.classList.add('hidden');

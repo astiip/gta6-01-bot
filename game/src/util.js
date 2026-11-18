@@ -74,7 +74,7 @@ export function facadeTexture(base, lit, rng) {
     for (let col = 0; col < 5; col += 1) {
       const x = 10 + col * 23;
       const y = 22 + row * 25;
-      const litWindow = rng() < 0.35;
+      const litWindow = rng() < 0.55;
       ctx.fillStyle = litWindow ? lit : '#1d2733';
       ctx.fillRect(x, y, 15, 17);
       ctx.fillStyle = 'rgba(255,255,255,0.25)';

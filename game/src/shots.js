@@ -28,7 +28,9 @@ function driveToward(state, tx, tz) {
 
 /** Put the player in a car at (x, z) facing `heading`. */
 function putPlayerInCar(state, x, z, heading) {
-  const car = makeCar(state.scene, 0xd84040, false, x, z, heading);
+  // The player's ride: a hot-pink VESPERA GT, the cover car's colour.
+  const car = makeCar(state.scene, 0xe83a8c, false, x, z, heading);
+  car.name = 'VESPERA GT';
   state.player.car = car;
   state.player.mode = 'car';
   state.player.mesh.visible = false;
@@ -46,7 +48,7 @@ function putPlayerInCar(state, x, z, heading) {
 export function stageShot(name, state, seedText) {
   const rng = mulberry32(hashSeed(seedText || `shot-${name}-1`));
   const { player, police, missions, gang, traffic, peds, city } = state;
-  const seconds = name === 'chase' ? 7 : name === 'drive' ? 8 : name === 'mission' ? 4 : 3;
+  const seconds = name === 'chase' ? 4 : name === 'drive' ? 8 : name === 'mission' ? 4 : 3;
   player.health = 100;
   player.armour = 50;
   player.cash = 12450;
@@ -56,37 +58,43 @@ export function stageShot(name, state, seedText) {
   if (name === 'chase') {
     // Cover: a golden-hour police chase — 3 wanted stars, the helicopter and
     // its searchlight, the full HUD, and a mission objective at once. The car
-    // runs straight up the x=40 avenue so the autopilot never cuts across
-    // buildings; the police start on the same avenue, right behind it.
+    // runs south down the x=40 avenue toward the beach, straight into the low
+    // sun, so the sunset fills the frame ahead like the top cover does; the
+    // police start on the same avenue, right behind it.
     missions.start(2);
     missions.stepIndex = 1;
     missions.refreshMarker();
-    putPlayerInCar(state, 40, 150, Math.PI);
+    putPlayerInCar(state, 40, 40, 0);
     police.addStars(3, 'shot');
     for (let i = 0; i < 3; i += 1) {
-      const pc = makeCar(state.scene, 0xf0f0f0, true, 40 + (i - 1) * 3.5, 150 + 18 + i * 12, Math.PI);
+      const pc = makeCar(state.scene, 0xf0f0f0, true, 40 + (i - 1) * 3.5, 40 - 18 - i * 12, 0);
       pc.ai = { player: true };
       police.cars.push(pc);
     }
     for (let i = 0; i < seconds / STEP; i += 1) {
-      const input = driveToward(state, 40, -160);
+      const input = driveToward(state, 40, 170);
       state.stepWorld(STEP, input);
     }
-    // Two police cars head-on ahead of the player, so the chase is visible
-    // in the frame, and one more right behind it.
-    for (let i = 0; i < 2; i += 1) {
-      const pc = makeCar(state.scene, 0xf0f0f0, true, 40 + (i === 0 ? -2 : 2), player.z - 24 - i * 10, 0);
+    // Two police cars flanking close behind the player — just behind it, at
+    // the frame's lower left and right, the way the cover frames the chase —
+    // and two more head-on ahead of it, so the chase is visible in the frame.
+    // The flankers sit 2 m behind the player (8 m from the camera): close
+    // enough to read as pursuit, far enough not to swallow the minimap.
+    for (const fx of [-4.5, 4.5]) {
+      const pc = makeCar(state.scene, 0xf0f0f0, true, player.x + fx, player.z - 2.0, 0);
       pc.ai = { player: true };
       police.cars.push(pc);
     }
-    const pcBehind = makeCar(state.scene, 0xf0f0f0, true, 40, player.z + 16, Math.PI);
-    pcBehind.ai = { player: true };
-    police.cars.push(pcBehind);
+    for (let i = 0; i < 2; i += 1) {
+      const pc = makeCar(state.scene, 0xf0f0f0, true, 40 + (i === 0 ? -2 : 2), player.z + 26 + i * 10, Math.PI);
+      pc.ai = { player: true };
+      police.cars.push(pc);
+    }
     // The helicopter hangs low ahead of the player for the frame, its
     // searchlight beam on the street — during play it rides higher.
     if (police.heli) {
       police.heli.x = player.x + 4;
-      police.heli.z = player.z - 30;
+      police.heli.z = player.z + 32;
       police.heli.y = 12;
       police.heli.mesh.position.set(police.heli.x, police.heli.y, police.heli.z);
       police.heli.mesh.rotation.y = Math.atan2(player.x - police.heli.x, player.z - police.heli.z);
@@ -153,6 +161,12 @@ export function stageShot(name, state, seedText) {
     for (let i = 0; i < seconds / STEP; i += 1) {
       state.stepWorld(STEP, { forward: false, back: false, left: false, right: false });
     }
+  }
+  // The mission timer counts from the mission's real start (time 0), not
+  // from the first HUD paint after staging — otherwise every shot would read 0:00.
+  if (missions.active) {
+    state.hud.missionIndex = missions.index;
+    state.hud.missionStartTime = 0;
   }
   // Face the camera at the action for the final frame.
   if (name === 'chase' || name === 'drive') {

@@ -17,7 +17,10 @@ function box(w, h, d, color, x, y, z) {
 
 function makePalm(rng) {
   const group = new THREE.Group();
-  const height = rand(rng, 4.5, 7);
+  // Shorter trunk and smaller, drooping fronds: the crown must stay low and
+  // tight so it never hangs over the top-right HUD (stars / vitals) in any
+  // shot — the fronds droop down instead of spreading flat into the sky.
+  const height = rand(rng, 4.0, 5.2);
   const trunk = new THREE.Mesh(
     new THREE.CylinderGeometry(0.14, 0.22, height, 6),
     new THREE.MeshLambertMaterial({ color: 0x8a6a4a }),
@@ -26,11 +29,11 @@ function makePalm(rng) {
   group.add(trunk);
   const frondMat = new THREE.MeshLambertMaterial({ color: 0x3f9e4d });
   for (let i = 0; i < 6; i += 1) {
-    const frond = new THREE.Mesh(new THREE.ConeGeometry(0.5, 2.6, 4), frondMat);
+    const frond = new THREE.Mesh(new THREE.ConeGeometry(0.38, 1.7, 4), frondMat);
     const a = (i / 6) * Math.PI * 2;
-    frond.position.set(Math.cos(a) * 0.9, height + 0.2, Math.sin(a) * 0.9);
-    frond.rotation.z = Math.cos(a) * 1.1;
-    frond.rotation.x = -Math.sin(a) * 1.1;
+    frond.position.set(Math.cos(a) * 0.6, height + 0.1, Math.sin(a) * 0.6);
+    frond.rotation.z = Math.cos(a) * 1.5;
+    frond.rotation.x = -Math.sin(a) * 1.5;
     group.add(frond);
   }
   const nuts = new THREE.Mesh(
@@ -39,6 +42,45 @@ function makePalm(rng) {
   );
   nuts.position.y = height + 0.1;
   group.add(nuts);
+  return group;
+}
+
+/** A neon billboard on two poles: bright unlit canvas face, readable at dusk. */
+function makeBillboard(text, bg, fg) {
+  const group = new THREE.Group();
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 192;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, 512, 192);
+  ctx.strokeStyle = fg;
+  ctx.lineWidth = 10;
+  ctx.strokeRect(8, 8, 496, 176);
+  ctx.fillStyle = fg;
+  ctx.font = '900 64px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, 256, 100);
+  const tex = new window.THREE.CanvasTexture(canvas);
+  tex.colorSpace = window.THREE.SRGBColorSpace;
+  const faceMat = new THREE.MeshBasicMaterial({ map: tex });
+  const frameMat = new THREE.MeshLambertMaterial({ color: 0x222226 });
+  const frame = new THREE.Mesh(new THREE.BoxGeometry(10.4, 4.2, 0.3), frameMat);
+  frame.position.y = 8;
+  group.add(frame);
+  for (const side of [0, Math.PI]) {
+    const face = new THREE.Mesh(new THREE.PlaneGeometry(10, 3.9), faceMat);
+    face.position.set(0, 8, side === 0 ? 0.17 : -0.17);
+    face.rotation.y = side;
+    group.add(face);
+  }
+  const poleMat = new THREE.MeshLambertMaterial({ color: 0x333338 });
+  for (const px of [-3.6, 3.6]) {
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 6, 6), poleMat);
+    pole.position.set(px, 3, 0);
+    group.add(pole);
+  }
   return group;
 }
 
@@ -166,10 +208,12 @@ export function buildCity(scene, rng) {
         waterTop.position.set(cx, 0.95, cz);
         scene.add(waterTop);
         colliders.push({ minX: cx - 4.6, maxX: cx + 4.6, minZ: cz - 4.6, maxZ: cz + 4.6 });
-        for (let p = 0; p < 6; p += 1) {
+        // Three palms only, on the south / west / north sides — none on the
+        // north-east approach the mission shot's camera looks in from, so no
+        // crown ever looms over the top-right HUD in that frame.
+        for (const a of [Math.PI / 2, Math.PI, (3 * Math.PI) / 2]) {
           const palm = makePalm(rng);
-          const a = (p / 6) * Math.PI * 2;
-          palm.position.set(cx + Math.cos(a) * 15, 0, cz + Math.sin(a) * 15);
+          palm.position.set(cx + Math.cos(a) * 17.5, 0, cz + Math.sin(a) * 17.5);
           scene.add(palm);
         }
         continue;
@@ -214,22 +258,42 @@ export function buildCity(scene, rng) {
   }
 
   // Palms along the beach and streetlights along the avenues.
-  for (let x = -190; x <= 190; x += 18) {
+  for (let x = -190; x <= 190; x += 12) {
     const palm = makePalm(rng);
     palm.position.set(x + rand(rng, -3, 3), 0, CITY.beachZ + rand(rng, 4, 22));
     scene.add(palm);
   }
   // Palms down the Miramar Strip boulevards, so the main avenues read as a
-  // palm-lined coastal city even from street level.
+  // palm-lined coastal city even from street level. They stand at the far
+  // edge of the sidewalk (x offset 8.0), clear of the road and out of the
+  // top-right HUD in the chase and drive shots. The rows stop short of the
+  // beach (t <= 120) so no crown crowds the camera in the beach shot.
   for (const s of [-40, 0, 40, 80]) {
-    for (let t = -140; t <= 140; t += 40) {
+    for (let t = -140; t <= 120; t += 40) {
       const palm = makePalm(rng);
-      palm.position.set(s + 6.5, 0, t + rand(rng, -4, 4));
+      palm.position.set(s + 8.0, 0, t + rand(rng, -4, 4));
       scene.add(palm);
       const palm2 = makePalm(rng);
-      palm2.position.set(s - 6.5, 0, t + 20 + rand(rng, -4, 4));
+      palm2.position.set(s - 8.0, 0, t + 10 + rand(rng, -4, 4));
       scene.add(palm2);
     }
+  }
+  // Neon billboards — the pink glow the cover shot is famous for. The two
+  // on the x=40 avenue stand at its beach end, angled toward the chase
+  // camera that comes down the avenue into the sunset; the NEON PALMS board
+  // waits ahead of the drift run on the x=-40 avenue. They stand off the
+  // road on the grass verge, facing the traffic.
+  const billboards = [
+    { text: 'FLAMINGO FM', bg: '#e83a8c', fg: '#ffffff', x: 48.5, z: 160, ry: -3 * Math.PI / 4 },
+    { text: 'VESPERA GT', bg: '#ffb020', fg: '#201400', x: 31.5, z: 155, ry: 3 * Math.PI / 4 },
+    { text: 'NEON PALMS', bg: '#20c8d8', fg: '#082028', x: -48.5, z: -80, ry: -3 * Math.PI / 4 },
+    { text: 'SOLMAR WHEEL', bg: '#7a3ad8', fg: '#ffffff', x: 48.5, z: -40, ry: -Math.PI / 2 },
+  ];
+  for (const b of billboards) {
+    const board = makeBillboard(b.text, b.bg, b.fg);
+    board.position.set(b.x, 0, b.z);
+    board.rotation.y = b.ry;
+    scene.add(board);
   }
   // Boardwalk along the top of the beach, with umbrellas on the sand below it.
   const boardwalk = new THREE.Mesh(

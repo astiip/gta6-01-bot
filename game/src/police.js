@@ -123,6 +123,7 @@ export class Police {
    */
   responseUnits(player) {
     const units = [];
+    const CALLSIGNS = ['IBIS', 'TARPON', 'HERON', 'KESTREL', 'MARLIN', 'FALCON', 'OSPREY'];
     const sorted = [...this.cars].sort((a, b) =>
       Math.hypot(a.x - player.x, a.z - player.z) - Math.hypot(b.x - player.x, b.z - player.z));
     sorted.forEach((car, i) => {
@@ -133,7 +134,7 @@ export class Police {
       if (dist < 8) behavior = 'RAMMING';
       else if (ahead > 0 && dist < 42) behavior = 'ROADBLOCK';
       else if (i === 1 && dist < 16) behavior = 'BOXING IN';
-      units.push({ callsign: `UNIT ${12 + i * 7}`, dist: Math.round(dist), behavior });
+      units.push({ callsign: `${CALLSIGNS[i % CALLSIGNS.length]}-${10 + ((i * 13 + 7) % 50)}`, dist: Math.round(dist), behavior });
     });
     if (this.heli) {
       const dist = Math.hypot(this.heli.x - player.x, this.heli.z - player.z);

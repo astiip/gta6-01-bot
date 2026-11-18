@@ -6,44 +6,89 @@ import { resolveBuildingCollision } from './city.js';
 
 const THREE = window.THREE;
 
-/** Build a low-poly car from boxes. `police` adds a light bar and a black-white paint job. */
+/** Build a detailed low-poly sports car from boxes. `police` adds a light bar and a black-white paint job. */
 export function makeCarMesh(color, police) {
   const group = new THREE.Group();
-  const bodyColor = police ? 0xf0f0f0 : color;
-  const body = new THREE.Mesh(
-    new THREE.BoxGeometry(2.0, 0.62, 4.4),
-    new THREE.MeshLambertMaterial({ color: bodyColor }),
-  );
-  body.position.y = 0.55;
-  group.add(body);
-  const cabin = new THREE.Mesh(
-    new THREE.BoxGeometry(1.7, 0.55, 2.1),
-    new THREE.MeshLambertMaterial({ color: police ? 0x222226 : 0x1a2530 }),
-  );
-  cabin.position.set(0, 1.1, -0.25);
-  group.add(cabin);
-  const bumper = new THREE.Mesh(
-    new THREE.BoxGeometry(2.05, 0.22, 0.3),
-    new THREE.MeshLambertMaterial({ color: 0x222226 }),
-  );
-  bumper.position.set(0, 0.4, 2.2);
-  group.add(bumper);
-  const wheelGeo = new THREE.CylinderGeometry(0.36, 0.36, 0.28, 10);
-  const wheelMat = new THREE.MeshLambertMaterial({ color: 0x141416 });
+  const paint = police ? 0xf0f0f0 : color;
+  const dark = 0x181820;
+  const glass = 0x141c26;
+  const lam = (c, e) => new THREE.MeshLambertMaterial({ color: c, emissive: e || 0x000000 });
+  const add = (geo, mat, x, y, z, rx) => {
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(x, y, z);
+    if (rx) m.rotation.x = rx;
+    group.add(m);
+    return m;
+  };
+  // Low, wide body over a dark lower skirt — two-tone paint.
+  add(new THREE.BoxGeometry(2.0, 0.5, 4.5), lam(paint), 0, 0.52, 0);
+  add(new THREE.BoxGeometry(2.04, 0.22, 4.1), lam(dark), 0, 0.28, 0);
+  // Hood, front splitter and grille.
+  add(new THREE.BoxGeometry(1.8, 0.1, 1.0), lam(paint), 0, 0.78, 1.55);
+  add(new THREE.BoxGeometry(2.02, 0.12, 0.35), lam(dark), 0, 0.3, 2.28);
+  add(new THREE.BoxGeometry(1.2, 0.16, 0.08), lam(dark), 0, 0.55, 2.26);
+  // Glasshouse cabin with a painted roof panel.
+  add(new THREE.BoxGeometry(1.62, 0.5, 1.9), lam(glass), 0, 1.0, -0.35);
+  add(new THREE.BoxGeometry(1.5, 0.08, 1.5), lam(paint), 0, 1.28, -0.35);
+  // Sloped windshield and rear glass.
+  add(new THREE.BoxGeometry(1.55, 0.06, 0.7), lam(0x0e141c), 0, 1.08, 0.72, -0.5);
+  add(new THREE.BoxGeometry(1.55, 0.06, 0.6), lam(0x0e141c), 0, 1.08, -1.32, 0.45);
+  // Side mirrors.
+  add(new THREE.BoxGeometry(0.16, 0.1, 0.3), lam(dark), -1.05, 1.05, 0.55);
+  add(new THREE.BoxGeometry(0.16, 0.1, 0.3), lam(dark), 1.05, 1.05, 0.55);
+  // Rear wing on two struts — the silhouette that reads as "sports car".
+  add(new THREE.BoxGeometry(0.1, 0.28, 0.1), lam(dark), -0.7, 0.92, -2.0);
+  add(new THREE.BoxGeometry(0.1, 0.28, 0.1), lam(dark), 0.7, 0.92, -2.0);
+  add(new THREE.BoxGeometry(1.9, 0.07, 0.5), lam(paint), 0, 1.1, -2.05);
+  // Centre stripe down the hood and roof (civilian cars only).
+  if (!police) {
+    add(new THREE.BoxGeometry(0.5, 0.03, 1.0), lam(dark), 0, 0.84, 1.55);
+    add(new THREE.BoxGeometry(0.5, 0.03, 1.5), lam(dark), 0, 1.33, -0.35);
+  }
+  // Twin exhausts.
+  const exhaustMat = lam(0x3a3a40);
+  for (const ex of [-0.5, 0.5]) {
+    const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.25, 8), exhaustMat);
+    pipe.rotation.x = Math.PI / 2;
+    pipe.position.set(ex, 0.32, -2.28);
+    group.add(pipe);
+  }
+  // Wheels: tyre + light hub + crossed spokes, grouped so stepCar can spin them.
+  const tireGeo = new THREE.CylinderGeometry(0.38, 0.38, 0.3, 12);
+  const tireMat = lam(0x141416);
+  const hubGeo = new THREE.CylinderGeometry(0.22, 0.22, 0.32, 10);
+  const hubMat = lam(0xc8c8d0);
+  const spokeGeo = new THREE.BoxGeometry(0.34, 0.62, 0.12);
+  const spokeMat = lam(0x3a3a44);
   const wheels = [];
   for (const [wx, wz] of [[-0.95, 1.45], [0.95, 1.45], [-0.95, -1.45], [0.95, -1.45]]) {
-    const wheel = new THREE.Mesh(wheelGeo, wheelMat);
-    wheel.rotation.z = Math.PI / 2;
-    wheel.position.set(wx, 0.36, wz);
+    const wheel = new THREE.Group();
+    const tire = new THREE.Mesh(tireGeo, tireMat);
+    tire.rotation.z = Math.PI / 2;
+    wheel.add(tire);
+    const hub = new THREE.Mesh(hubGeo, hubMat);
+    hub.rotation.z = Math.PI / 2;
+    wheel.add(hub);
+    for (const a of [0, Math.PI / 2]) {
+      const spoke = new THREE.Mesh(spokeGeo, spokeMat);
+      spoke.rotation.x = a;
+      wheel.add(spoke);
+    }
+    wheel.position.set(wx, 0.38, wz);
     group.add(wheel);
     wheels.push(wheel);
   }
-  const headMat = new THREE.MeshLambertMaterial({ color: 0xfff2b0, emissive: 0x554411 });
+  // Headlights: bright emissive pair; taillights: one full-width red bar.
+  const headMat = new THREE.MeshLambertMaterial({ color: 0xfff2b0, emissive: 0xaa8833 });
   for (const hx of [-0.65, 0.65]) {
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.16, 0.08), headMat);
-    head.position.set(hx, 0.62, 2.22);
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.14, 0.08), headMat);
+    head.position.set(hx, 0.62, 2.26);
     group.add(head);
   }
+  const tailMat = new THREE.MeshLambertMaterial({ color: 0xd82020, emissive: 0xcc1818 });
+  const tail = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.14, 0.08), tailMat);
+  tail.position.set(0, 0.62, -2.26);
+  group.add(tail);
   let lightBar = null;
   if (police) {
     const door = new THREE.Mesh(
@@ -145,8 +190,8 @@ export class Traffic {
     this.city = city;
     this.cars = [];
     this.parked = [];
-    for (let i = 0; i < 14; i += 1) this.spawnCruiser();
-    for (let i = 0; i < 8; i += 1) this.spawnParked();
+    for (let i = 0; i < 22; i += 1) this.spawnCruiser();
+    for (let i = 0; i < 12; i += 1) this.spawnParked();
   }
 
   spawnCruiser() {
