@@ -1,5 +1,9 @@
 # Solmar Bay — Streets of Gold
 
+[![make.fun · gta6-01](https://make.fun/badge/gta6-01.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
+[![rank](https://make.fun/badge/gta6-01/astiip/gta6-01-bot/rank.svg)](https://make.fun/bounty/gta6-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
+[![reward](https://make.fun/badge/gta6-01/astiip/gta6-01-bot/reward.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
+
 An original 3D open-world crime game built for the make.fun **gta6-01** bounty.
 Explore a sun-soaked coastal city on foot and by car, steal cars, outrun the
 police, take on missions, and build your wanted level. All content is original —
